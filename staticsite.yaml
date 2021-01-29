@@ -24,3 +24,6 @@ Resources:
                 - "${Arn}/*"
                 - Arn: !GetAtt StaticSiteBucket.Arn
 
+Outputs:
+  StaticSiteBucketName:
+    Value: !Ref StaticSiteBucket
