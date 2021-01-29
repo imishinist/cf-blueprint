@@ -27,3 +27,5 @@ Resources:
 Outputs:
   StaticSiteBucketName:
     Value: !Ref StaticSiteBucket
+  StaticSiteURL:
+    Value: !GetAtt StaticSiteBucket.WebsiteURL
