@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  StaticSiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: "PublicRead"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html          
+  StaticSiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticSiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - !Sub
+                - "${Arn}/*"
+                - Arn: !GetAtt StaticSiteBucket.Arn
+
