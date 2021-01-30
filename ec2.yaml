@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  InstanceName:
+    Type: String
+  InstanceVolumeSize:
+    Type: Number
+    Default: 200
+  InstanceType:
+    Type: String
+    Default: "t3.small"
+    AllowedValues:
+      - "t3.micro"
+      - "t3.small"
+      - "t3.medium"
+      - "t3.large"
+      - "t3.xlarge"
+      - "r5.large"
+      - "r5.xlarge"
+      - "r5.2xlarge"
+      - "r5.4xlarge"
+      - "r5.8xlarge"
+      - "m5.large"
+      - "m5.xlarge"
+      - "m5.2xlarge"
+      - "m5.4xlarge"
+      - "m5.8xlarge"
+  InstanceDesiredCapacity:
+    Type: Number
+    Default: 3
+  InstanceAutoScalingMinSize:
+    Type: Number
+    Default: 1
+  InstanceAutoScalingMaxSize:
+    Type: Number
+    Default: 20
+  InstanceAmiID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+  InstanceSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+Resources:
+  InstanceAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ssm.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+  InstanceAccessPolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:StartSession
+            Resource:
+              - !Sub 'arn:aws:ec2:ap-northeast-1:${AWS::AccountId}:instance/*'
+          - Effect: Allow
+            Action:
+              - "ssm:DescribeSessions"
+              - "ssm:GetConnectionStatus"
+              - "ssm:DescribeInstanceProperties"
+              - "ec2:DescribeInstances"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "cloudwatch:PutMetricData"
+              - "cloudwatch:ListMetrics"
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+              - "logs:DescribeLogGroups"
+              - "logs:DescribeLogStreams"
+              - "logs:DescribeMetricFilters"
+            Resource:
+              - 'arn:aws:logs:*:*:log-group:*'
+              - 'arn:aws:logs:*:*:log-group:*:*:*'
+      Roles:
+        - !Ref InstanceAccessRole
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceAccessRole
+  InstanceLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !Ref InstanceAmiID
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
+      InstanceType: !Ref InstanceType
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: !Ref InstanceVolumeSize
+            VolumeType: gp2
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref InstanceSubnets
+      AvailabilityZones:
+        - ap-northeast-1a
+        - ap-northeast-1c
+      DesiredCapacity: !Ref InstanceDesiredCapacity
+      MinSize: !Ref InstanceAutoScalingMinSize
+      MaxSize: !Ref InstanceAutoScalingMaxSize
+      LaunchConfigurationName: !Ref InstanceLaunchConfiguration
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+          PropagateAtLaunch: true
+  InstanceVarLogMessages:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${InstanceName}./var/log/messages"
+      RetentionInDays: 30
