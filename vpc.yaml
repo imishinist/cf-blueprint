@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  HostedZoneName:
-    Type: String
-    Default: ''
   VPCCidr:
     Type: String
     Default: '172.20.0.0/16'
@@ -24,8 +21,6 @@ Parameters:
   PrivateSubnetCidrC:
     Type: String
     Default: '172.20.56.0/21'
-Conditions:
-  SpecifiedHostedZone: !Not [!Equals [!Ref HostedZoneName, ""]]
 Resources:
   VPC:
     Type: AWS::EC2::VPC
