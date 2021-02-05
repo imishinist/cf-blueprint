@@ -8,11 +8,12 @@ import fire
 
 import os.path
 
+
 class CFnDeploy(object):
     def __load_jsonnet(self, params_path):
         with open(params_path) as f:
             jsonnet_str = f.read()
-            
+
         json_str = _jsonnet.evaluate_snippet(
             "snippet", jsonnet_str)
 
@@ -40,7 +41,7 @@ class CFnDeploy(object):
             )
         return cfn_params
 
-    def deploy(self, stack, template_path, params_path):        
+    def deploy(self, stack, template_path, params_path):
         client = boto3.client('cloudformation')
         with open(template_path) as f:
             s = f.read()
@@ -53,6 +54,7 @@ class CFnDeploy(object):
             Parameters=params,
             Capabilities=['CAPABILITY_IAM', 'CAPABILITY_AUTO_EXPAND'])
         print(response)
+
 
 if __name__ == '__main__':
     fire.Fire(CFnDeploy)
