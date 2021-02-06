@@ -95,6 +95,15 @@ class CFnDeploy(object):
     # ported from:
     # https://github.com/aws/aws-cli/blob/develop/awscli/customizations/cloudformation/deploy.py
     def deploy(self):
+        """
+        [option]
+
+        option:
+        stack-name: CloudFormation stack name
+        template-path: CloudFormation template file path
+        params-path: CloudFormation template parameters file path.
+                     allowed file type: json, jsonnet
+        """
         client = boto3.client('cloudformation')
 
         if not os.path.isfile(self.template_path):
