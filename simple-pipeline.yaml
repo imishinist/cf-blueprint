@@ -20,6 +20,7 @@ Resources:
         TopicConfigurations:
           - Event: "s3:ObjectCreated:*"
             Topic: !Ref SNSTopic
+    DependsOn: SNSTopicPolicy
 
   SNSTopic:
     Type: AWS::SNS::Topic
@@ -37,9 +38,6 @@ Resources:
             Action:
               - "sns:Publish"
             Resource: !Ref SNSTopic
-            Condition:
-              ArnEquals:
-                "aws:SourceArn": !GetAtt TestBucket.Arn
 
   IngressQueueSNSTopicSubscription:
     Type: AWS::SNS::Subscription
@@ -107,6 +105,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+
+  TestLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${TestLambda}"
+      RetentionInDays: 3
 
 Outputs:
   TestBucketARN:
