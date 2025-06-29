@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  # Static Site S3 Bucket
+  StaticSiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html          
+  
+  StaticSiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticSiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource:
+              - !Sub
+                - "${Arn}/*"
+                - Arn: !GetAtt StaticSiteBucket.Arn
+
+  # S3 Bucket for storing source code packages
+  PackageStore:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-package-store-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+
+  # S3 Bucket for CodePipeline artifacts
+  ArtifactStore:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-artifacts-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+
+  # IAM Role for CodePipeline
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "${PackageStore.Arn}"
+                  - !Sub "${PackageStore.Arn}/*"
+                  - !Sub "${ArtifactStore.Arn}"
+                  - !Sub "${ArtifactStore.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetProjects
+                Resource: !GetAtt K6TestProject.Arn
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt CodeBuildRole.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*:*"
+
+  # CodeBuild Report Group for k6 test results
+  K6TestReportGroup:
+    Type: AWS::CodeBuild::ReportGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-k6-test-reports"
+      Type: TEST
+      ExportConfig:
+        ExportConfigType: NO_EXPORT
+      Tags:
+        - Key: Project
+          Value: !Ref AWS::StackName
+
+  # IAM Role for CodeBuild
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub "${ArtifactStore.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateReport
+                  - codebuild:UpdateReport
+                  - codebuild:BatchPutTestCases
+                  - codebuild:CreateReportGroup
+                Resource: 
+                  - !GetAtt K6TestReportGroup.Arn
+                  - !Sub "arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${AWS::StackName}-k6-test-reports"
+
+  # CodeBuild Project for k6 testing
+  K6TestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}-k6-test"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: TARGET_URL
+            Value: !GetAtt StaticSiteBucket.WebsiteURL
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+              commands:
+                - echo Installing k6...
+                - curl -sL https://github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz | tar xz
+                - sudo mv k6-v0.47.0-linux-amd64/k6 /usr/local/bin/
+                - k6 version
+            pre_build:
+              commands:
+                - echo Pre-build phase started on `date`
+                - echo TARGET_URL is $TARGET_URL
+            build:
+              commands:
+                - echo Build phase started on `date`
+                - ls -la
+                - |
+                  if [ -f "k6-test.js" ]; then
+                    echo "Running k6 test with k6-test.js..."
+                    k6 run -e TARGET_URL=$TARGET_URL k6-test.js
+                  else
+                    echo "k6-test.js not found. Please add k6-test.js to your source code."
+                    exit 1
+                  fi
+            post_build:
+              commands:
+                - echo Build completed on `date`
+          reports:
+            ${K6TestReportGroup}:
+              files:
+                - 'summary-junit.xml'
+              file-format: 'JUNITXML'
+
+  # CodePipeline
+  TestPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub "${AWS::StackName}-test-pipeline"
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStore
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                S3Bucket: !Ref PackageStore
+                S3ObjectKey: source.zip
+                PollForSourceChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Test
+          Actions:
+            - Name: K6Test
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref K6TestProject
+              InputArtifacts:
+                - Name: SourceOutput
+
+Outputs:
+  StaticSiteBucketName:
+    Description: Name of the static site S3 bucket
+    Value: !Ref StaticSiteBucket
+  
+  StaticSiteURL:
+    Description: URL of the static site
+    Value: !GetAtt StaticSiteBucket.WebsiteURL
+  
+  PackageStoreBucketName:
+    Description: Name of the S3 bucket for storing source packages
+    Value: !Ref PackageStore
+  
+  ArtifactStoreBucketName:
+    Description: Name of the S3 bucket for pipeline artifacts
+    Value: !Ref ArtifactStore
+  
+  PipelineName:
+    Description: Name of the CodePipeline
+    Value: !Ref TestPipeline
+  
+  K6TestReportGroup:
+    Description: Name of the CodeBuild Report Group for k6 tests
+    Value: !Ref K6TestReportGroup

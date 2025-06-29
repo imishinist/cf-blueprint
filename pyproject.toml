@@ -1,0 +1,12 @@
+[project]
+name = "cf-blueprint"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "awscli>=1.40.45",
+    "boto3>=1.38.46",
+    "fire>=0.7.0",
+    "jsonnet>=0.21.0",
+]
