@@ -1,0 +1,33 @@
+{
+  "environments": {
+    "development": {
+      "static_site": "${TARGET_URL}",
+      "api_endpoint": "${API_URL:-}",
+      "timeout": 5000
+    },
+    "staging": {
+      "static_site": "${TARGET_URL}",
+      "api_endpoint": "${API_URL:-}",
+      "timeout": 3000
+    },
+    "production": {
+      "static_site": "${TARGET_URL}",
+      "api_endpoint": "${API_URL:-}",
+      "timeout": 2000
+    }
+  },
+  "test_cases": [
+    {
+      "name": "Static Site Index",
+      "path": "/index.html",
+      "expected_status": 200,
+      "expected_content_type": "text/html"
+    },
+    {
+      "name": "404 Error Page",
+      "path": "/nonexistent-page",
+      "expected_status": 404,
+      "expected_content_type": "text/html"
+    }
+  ]
+}

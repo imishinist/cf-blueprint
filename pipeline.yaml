@@ -174,10 +174,7 @@ Resources:
               runtime-versions:
                 nodejs: 18
               commands:
-                - echo Installing k6...
-                - curl -sL https://github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz | tar xz
-                - sudo mv k6-v0.47.0-linux-amd64/k6 /usr/local/bin/
-                - k6 version
+                - ./scripts/install-tools.sh
             pre_build:
               commands:
                 - echo Pre-build phase started on `date`
@@ -185,22 +182,14 @@ Resources:
             build:
               commands:
                 - echo Build phase started on `date`
-                - ls -la
-                - |
-                  if [ -f "k6-test.js" ]; then
-                    echo "Running k6 test with k6-test.js..."
-                    k6 run -e TARGET_URL=$TARGET_URL k6-test.js
-                  else
-                    echo "k6-test.js not found. Please add k6-test.js to your source code."
-                    exit 1
-                  fi
+                - ./scripts/run-tests.sh
             post_build:
               commands:
                 - echo Build completed on `date`
           reports:
             ${K6TestReportGroup}:
               files:
-                - 'summary-junit.xml'
+                - 'tests/junit-output/*.xml'
               file-format: 'JUNITXML'
 
   # CodePipeline

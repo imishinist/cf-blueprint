@@ -3,7 +3,7 @@ import { check, sleep, group } from 'k6';
 import { jUnit, textSummary } from 'https://jslib.k6.io/k6-summary/0.1.0/index.js';
 export function handleSummary(data) {
   return {
-    'summary-junit.xml': jUnit(data, { classname: 'k6-loadtest' }),
+    'tests/junit-output/k6-junit.xml': jUnit(data, { classname: 'k6-loadtest' }),
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
   }
 }
@@ -221,8 +221,6 @@ export default function() {
 
   // エンドポイント毎にグループ化
   group(`${testCase.name} - ${testCase.description}`, function() {
-    console.log(`Testing ${testCase.name}: ${fullUrl}`);
-
     // タグを付けてリクエストを実行
     let response = http.get(fullUrl, {
       tags: {
@@ -252,11 +250,6 @@ export default function() {
           url_name: testCase.name,
           check_name: checkItem.name
         });
-
-        // デバッグ情報
-        if (!result) {
-          console.error(`❌ ${testCase.name}.${checkItem.name}: ${checkItem.description} failed`);
-        }
       });
     });
   });

@@ -1,0 +1,24 @@
+http:
+  # Static Site Index Page
+  {{ .Env.TARGET_URL }}/index.html:
+    status: 200
+    timeout: 5000
+    headers:
+      - "Content-Type: text/html"
+
+  # Check for 404 handling
+  {{ .Env.TARGET_URL }}/nonexistent-page:
+    status: 404
+    timeout: 5000
+
+# Additional file checks if needed
+file:
+  /tmp/goss-test-marker:
+    exists: false
+
+# Command checks for validation
+command:
+  "echo 'Goss HTTP tests completed'":
+    exit-status: 0
+    stdout:
+      - "Goss HTTP tests completed"
