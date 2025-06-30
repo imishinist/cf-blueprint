@@ -104,7 +104,12 @@ Resources:
       Name: !Sub "${AWS::StackName}-k6-test-reports"
       Type: TEST
       ExportConfig:
-        ExportConfigType: NO_EXPORT
+        ExportConfigType: S3
+        S3Destination:
+          Bucket: !Ref ArtifactStore
+          Path: test-reports
+          Packaging: ZIP
+          EncryptionDisabled: true
       Tags:
         - Key: Project
           Value: !Ref AWS::StackName
@@ -136,8 +141,11 @@ Resources:
                   - s3:GetObject
                   - s3:GetObjectVersion
                   - s3:PutObject
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
                 Resource:
                   - !Sub "${ArtifactStore.Arn}/*"
+                  - !Sub "${ArtifactStore.Arn}"
               - Effect: Allow
                 Action:
                   - codebuild:CreateReport
